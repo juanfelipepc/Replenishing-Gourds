@@ -1,0 +1,27 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+
+[[dependencies.replenishinggourd]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47.4.10,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.replenishinggourd]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.20.1,1.21)"
+    ordering="NONE"
+    side="BOTH"
+
+[[mods]]
+    modId="replenishinggourd"
+    version="1.0.0"
+    displayName="Replenishing Gourd"
+    description='''
+A gourd that stores a potion effect with 3 charges.
+Each charge replenishes every 60 seconds automatically.
+Craft with: Gourd Base + Mystery Seed + any Potion.
+'''
