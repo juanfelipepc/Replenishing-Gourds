@@ -1,6 +1,7 @@
 package com.replenishinggourd.mod.item;
 
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -8,7 +9,6 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -18,215 +18,176 @@ import net.minecraftforge.registries.ForgeRegistries;
 
 import javax.annotation.Nullable;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The Replenishing Gourd.
  *
- * NBT tags used:
- *   - "EffectId"       : ResourceLocation string of the stored MobEffect
- *   - "EffectDuration" : int, duration in ticks copied from the crafted potion
- *   - "EffectAmplifier": int, amplifier copied from the crafted potion
- *   - "Charges"        : int, remaining uses (0-3)
- *   - "LastUsedTime"   : long, world game-time when last charge was consumed
+ * NBT tags:
+ *   "EffectId"        - ResourceLocation string of the stored MobEffect
+ *   "EffectDuration"  - int, ticks
+ *   "EffectAmplifier" - int
+ *   "Charges"         - int 0-3
+ *   "LastUsedTime"    - long, game-time when a charge was last consumed
  *
- * Charge replenishment:
- *   One charge every 60 seconds (1200 ticks).
- *   Checked lazily when the item is used or inspected.
+ * Charge replenishment: 1 charge per 60 s (1200 ticks), checked lazily.
  */
 public class ReplenishingGourdItem extends Item {
 
-    public static final int MAX_CHARGES = 3;
-    /** Ticks between each charge replenishment: 60 s × 20 t/s = 1200 */
-    public static final long RECHARGE_TICKS = 1200L;
+    public static final int  MAX_CHARGES    = 3;
+    public static final long RECHARGE_TICKS = 1200L; // 60 s
 
-    // NBT keys
     private static final String TAG_EFFECT_ID        = "EffectId";
     private static final String TAG_EFFECT_DURATION  = "EffectDuration";
     private static final String TAG_EFFECT_AMPLIFIER = "EffectAmplifier";
     private static final String TAG_CHARGES          = "Charges";
     private static final String TAG_LAST_USED_TIME   = "LastUsedTime";
 
+    /**
+     * Maps MobEffect registry path → texture suffix used in the model filename.
+     * e.g.  "speed" → "replenishing_gourd_speed"
+     */
+    private static final Map<String, String> EFFECT_TO_MODEL = Map.ofEntries(
+        Map.entry("speed",              "replenishing_gourd_speed"),
+        Map.entry("slowness",           "replenishing_gourd_slowness"),
+        Map.entry("strength",           "replenishing_gourd_strength"),
+        Map.entry("weakness",           "replenishing_gourd_weakness"),
+        Map.entry("instant_health",     "replenishing_gourd_instant_health"),
+        Map.entry("instant_damage",     "replenishing_gourd_instant_damage"),
+        Map.entry("regeneration",       "replenishing_gourd_regeneration"),
+        Map.entry("poison",             "replenishing_gourd_poison"),
+        Map.entry("fire_resistance",    "replenishing_gourd_fire_resistance"),
+        Map.entry("water_breathing",    "replenishing_gourd_water_breathing"),
+        Map.entry("night_vision",       "replenishing_gourd_night_vision"),
+        Map.entry("invisibility",       "replenishing_gourd_invisibility"),
+        Map.entry("jump",               "replenishing_gourd_jump_boost"),
+        Map.entry("slow_falling",       "replenishing_gourd_slow_falling"),
+        Map.entry("movement_slowdown",  "replenishing_gourd_movement_slowdown")
+    );
+
     public ReplenishingGourdItem(Properties properties) {
         super(properties);
     }
 
-    // -----------------------------------------------------------------------
-    // Static helpers — used by the crafting recipe handler
-    // -----------------------------------------------------------------------
+    // ── Static factory called from GourdCraftingRecipe ───────────────────────
 
-    /**
-     * Imprint a potion effect onto a gourd stack.
-     * Called from the custom crafting recipe after validating ingredients.
-     */
     public static ItemStack createFilledGourd(ItemStack gourdStack, MobEffectInstance effect) {
         CompoundTag tag = gourdStack.getOrCreateTag();
-        tag.putString(TAG_EFFECT_ID, ForgeRegistries.MOB_EFFECTS.getKey(effect.getEffect()).toString());
-        tag.putInt(TAG_EFFECT_DURATION, effect.getDuration());
-        tag.putInt(TAG_EFFECT_AMPLIFIER, effect.getAmplifier());
-        tag.putInt(TAG_CHARGES, MAX_CHARGES);
-        tag.putLong(TAG_LAST_USED_TIME, 0L);
+        tag.putString(TAG_EFFECT_ID,        ForgeRegistries.MOB_EFFECTS.getKey(effect.getEffect()).toString());
+        tag.putInt(TAG_EFFECT_DURATION,     effect.getDuration());
+        tag.putInt(TAG_EFFECT_AMPLIFIER,    effect.getAmplifier());
+        tag.putInt(TAG_CHARGES,             MAX_CHARGES);
+        tag.putLong(TAG_LAST_USED_TIME,     0L);
         return gourdStack;
     }
 
-    // -----------------------------------------------------------------------
-    // Charge replenishment (lazy evaluation)
-    // -----------------------------------------------------------------------
+    // ── Helpers ──────────────────────────────────────────────────────────────
 
     /**
-     * Recalculate how many charges should have replenished since last use,
-     * and update the stack NBT. Call this before reading/modifying charges.
+     * Returns the model name suffix for the stored effect, e.g. "replenishing_gourd_speed".
+     * Falls back to "replenishing_gourd" (base texture) if unknown.
      */
+    public static String getModelName(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        if (tag == null || !tag.contains(TAG_EFFECT_ID)) return "replenishing_gourd";
+        ResourceLocation loc = ResourceLocation.tryParse(tag.getString(TAG_EFFECT_ID));
+        if (loc == null) return "replenishing_gourd";
+        String path = loc.getPath(); // e.g. "speed", "jump", "instant_health"
+        return EFFECT_TO_MODEL.getOrDefault(path, "replenishing_gourd");
+    }
+
     private void refreshCharges(ItemStack stack, Level level) {
         CompoundTag tag = stack.getOrCreateTag();
         if (!tag.contains(TAG_CHARGES)) return;
-
         int charges = tag.getInt(TAG_CHARGES);
-        if (charges >= MAX_CHARGES) return; // Already full
+        if (charges >= MAX_CHARGES) return;
 
-        long lastUsed  = tag.getLong(TAG_LAST_USED_TIME);
-        long now       = level.getGameTime();
-        long elapsed   = now - lastUsed;
-
-        // How many full recharge intervals have passed?
-        int gained = (int) (elapsed / RECHARGE_TICKS);
+        long lastUsed = tag.getLong(TAG_LAST_USED_TIME);
+        long elapsed  = level.getGameTime() - lastUsed;
+        int gained    = (int) (elapsed / RECHARGE_TICKS);
         if (gained <= 0) return;
 
         int newCharges = Math.min(MAX_CHARGES, charges + gained);
         tag.putInt(TAG_CHARGES, newCharges);
-
         if (newCharges < MAX_CHARGES) {
-            // Advance lastUsedTime by the ticks we consumed
             tag.putLong(TAG_LAST_USED_TIME, lastUsed + (long) gained * RECHARGE_TICKS);
         }
-        // If now full, no need to keep tracking time
     }
 
-    // -----------------------------------------------------------------------
-    // Item use
-    // -----------------------------------------------------------------------
+    // ── Item use ─────────────────────────────────────────────────────────────
 
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
         CompoundTag tag = stack.getOrCreateTag();
 
-        // Must have an effect imprinted
         if (!tag.contains(TAG_EFFECT_ID)) {
             player.displayClientMessage(
-                    Component.literal("This gourd is empty. Craft it with a potion first!").withStyle(ChatFormatting.RED),
-                    true);
+                Component.literal("This gourd is empty — craft it with a potion first!").withStyle(ChatFormatting.RED), true);
             return InteractionResultHolder.fail(stack);
         }
 
-        // Lazy-refresh charges
-        if (!level.isClientSide) {
-            refreshCharges(stack, level);
-        }
+        if (!level.isClientSide) refreshCharges(stack, level);
 
         int charges = tag.getInt(TAG_CHARGES);
         if (charges <= 0) {
             player.displayClientMessage(
-                    Component.literal("No charges left — wait for it to replenish!").withStyle(ChatFormatting.GOLD),
-                    true);
+                Component.literal("No charges left — wait for it to replenish!").withStyle(ChatFormatting.GOLD), true);
             return InteractionResultHolder.fail(stack);
         }
 
-        // Apply the stored effect
         if (!level.isClientSide) {
             MobEffect effect = ForgeRegistries.MOB_EFFECTS.getValue(
-                    ResourceLocation.tryParse(tag.getString(TAG_EFFECT_ID)));
-
+                ResourceLocation.tryParse(tag.getString(TAG_EFFECT_ID)));
             if (effect != null) {
-                int duration  = tag.getInt(TAG_EFFECT_DURATION);
-                int amplifier = tag.getInt(TAG_EFFECT_AMPLIFIER);
-                player.addEffect(new MobEffectInstance(effect, duration, amplifier));
-
-                // Deduct a charge and record the time
+                player.addEffect(new MobEffectInstance(effect, tag.getInt(TAG_EFFECT_DURATION), tag.getInt(TAG_EFFECT_AMPLIFIER)));
                 int newCharges = charges - 1;
                 tag.putInt(TAG_CHARGES, newCharges);
-                if (newCharges < MAX_CHARGES) {
-                    // Start the recharge clock from now (only if we weren't already counting)
-                    long lastUsed = tag.getLong(TAG_LAST_USED_TIME);
-                    if (newCharges == MAX_CHARGES - 1) {
-                        // First charge consumed — begin timer
-                        tag.putLong(TAG_LAST_USED_TIME, level.getGameTime());
-                    }
-                    // If already counting (lastUsed != 0 and charges were partially filled),
-                    // keep the existing timer so partial progress is preserved.
+                if (newCharges == MAX_CHARGES - 1) {
+                    tag.putLong(TAG_LAST_USED_TIME, level.getGameTime());
                 }
-
                 player.displayClientMessage(
-                        Component.literal("Charges remaining: " + newCharges + "/" + MAX_CHARGES)
-                                .withStyle(ChatFormatting.GREEN),
-                        true);
+                    Component.literal("Charges: " + newCharges + "/" + MAX_CHARGES).withStyle(ChatFormatting.GREEN), true);
             }
         }
-
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
     }
 
-    // -----------------------------------------------------------------------
-    // Durability bar (visual charge indicator)
-    // -----------------------------------------------------------------------
+    // ── Durability bar ───────────────────────────────────────────────────────
 
-    @Override
-    public boolean isBarVisible(ItemStack stack) {
+    @Override public boolean isBarVisible(ItemStack stack) {
         return stack.getOrCreateTag().contains(TAG_CHARGES);
     }
-
-    @Override
-    public int getBarWidth(ItemStack stack) {
-        int charges = stack.getOrCreateTag().getInt(TAG_CHARGES);
-        return Math.round(13.0f * charges / MAX_CHARGES);
+    @Override public int getBarWidth(ItemStack stack) {
+        return Math.round(13.0f * stack.getOrCreateTag().getInt(TAG_CHARGES) / MAX_CHARGES);
+    }
+    @Override public int getBarColor(ItemStack stack) {
+        int c = stack.getOrCreateTag().getInt(TAG_CHARGES);
+        return c == MAX_CHARGES ? 0x00FF00 : c > 0 ? 0xFFAA00 : 0xFF2200;
     }
 
-    @Override
-    public int getBarColor(ItemStack stack) {
-        int charges = stack.getOrCreateTag().getInt(TAG_CHARGES);
-        if (charges == MAX_CHARGES) return 0x00FF00; // Green — full
-        if (charges > 0)            return 0xFFAA00; // Orange — partial
-        return 0xFF2200;                              // Red — empty
-    }
-
-    // -----------------------------------------------------------------------
-    // Tooltip
-    // -----------------------------------------------------------------------
+    // ── Tooltip ──────────────────────────────────────────────────────────────
 
     @Override
-    public void appendHoverText(ItemStack stack, @Nullable Level level,
-                                List<Component> tooltip, TooltipFlag flag) {
+    public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
         CompoundTag tag = stack.getOrCreateTag();
-
         if (!tag.contains(TAG_EFFECT_ID)) {
-            tooltip.add(Component.literal("Empty — craft with a potion to fill it.")
-                    .withStyle(ChatFormatting.GRAY));
+            tooltip.add(Component.literal("Empty — craft with a potion to fill it.").withStyle(ChatFormatting.GRAY));
             return;
         }
-
-        MobEffect effect = ForgeRegistries.MOB_EFFECTS.getValue(
-                ResourceLocation.tryParse(tag.getString(TAG_EFFECT_ID)));
-
+        MobEffect effect = ForgeRegistries.MOB_EFFECTS.getValue(ResourceLocation.tryParse(tag.getString(TAG_EFFECT_ID)));
         if (effect != null) {
-            tooltip.add(Component.literal("Effect: ")
-                    .withStyle(ChatFormatting.GRAY)
-                    .append(Component.translatable(effect.getDescriptionId())
-                            .withStyle(ChatFormatting.AQUA)));
+            tooltip.add(Component.literal("Effect: ").withStyle(ChatFormatting.GRAY)
+                .append(Component.translatable(effect.getDescriptionId()).withStyle(ChatFormatting.AQUA)));
         }
-
         int charges = tag.getInt(TAG_CHARGES);
         tooltip.add(Component.literal("Charges: " + charges + "/" + MAX_CHARGES)
-                .withStyle(charges > 0 ? ChatFormatting.GREEN : ChatFormatting.RED));
-        tooltip.add(Component.literal("Replenishes 1 charge every 60 seconds.")
-                .withStyle(ChatFormatting.DARK_GRAY));
+            .withStyle(charges > 0 ? ChatFormatting.GREEN : ChatFormatting.RED));
+        tooltip.add(Component.literal("Replenishes 1 charge every 60 seconds.").withStyle(ChatFormatting.DARK_GRAY));
     }
-
-    // -----------------------------------------------------------------------
-    // Prevent stacking gourds with different effects / charges
-    // -----------------------------------------------------------------------
 
     @Override
     public boolean isFoil(ItemStack stack) {
-        // Slight enchantment glint when fully charged
         CompoundTag tag = stack.getOrCreateTag();
         return tag.contains(TAG_CHARGES) && tag.getInt(TAG_CHARGES) == MAX_CHARGES;
     }
