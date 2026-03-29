@@ -1,6 +1,98 @@
 {
   "parent": "item/generated",
   "textures": {
-    "layer0": "replenishinggourd:item/replenishing_gourd"
-  }
+    "layer0": "replenishinggourd:item/gourd_base"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "replenishinggourd:effect_index": 0.0625
+      },
+      "model": "replenishinggourd:item/replenishing_gourd_speed"
+    },
+    {
+      "predicate": {
+        "replenishinggourd:effect_index": 0.125
+      },
+      "model": "replenishinggourd:item/replenishing_gourd_slowness"
+    },
+    {
+      "predicate": {
+        "replenishinggourd:effect_index": 0.1875
+      },
+      "model": "replenishinggourd:item/replenishing_gourd_strength"
+    },
+    {
+      "predicate": {
+        "replenishinggourd:effect_index": 0.25
+      },
+      "model": "replenishinggourd:item/replenishing_gourd_weakness"
+    },
+    {
+      "predicate": {
+        "replenishinggourd:effect_index": 0.3125
+      },
+      "model": "replenishinggourd:item/replenishing_gourd_instant_health"
+    },
+    {
+      "predicate": {
+        "replenishinggourd:effect_index": 0.375
+      },
+      "model": "replenishinggourd:item/replenishing_gourd_instant_damage"
+    },
+    {
+      "predicate": {
+        "replenishinggourd:effect_index": 0.4375
+      },
+      "model": "replenishinggourd:item/replenishing_gourd_regeneration"
+    },
+    {
+      "predicate": {
+        "replenishinggourd:effect_index": 0.5
+      },
+      "model": "replenishinggourd:item/replenishing_gourd_poison"
+    },
+    {
+      "predicate": {
+        "replenishinggourd:effect_index": 0.5625
+      },
+      "model": "replenishinggourd:item/replenishing_gourd_fire_resistance"
+    },
+    {
+      "predicate": {
+        "replenishinggourd:effect_index": 0.625
+      },
+      "model": "replenishinggourd:item/replenishing_gourd_water_breathing"
+    },
+    {
+      "predicate": {
+        "replenishinggourd:effect_index": 0.6875
+      },
+      "model": "replenishinggourd:item/replenishing_gourd_night_vision"
+    },
+    {
+      "predicate": {
+        "replenishinggourd:effect_index": 0.75
+      },
+      "model": "replenishinggourd:item/replenishing_gourd_invisibility"
+    },
+    {
+      "predicate": {
+        "replenishinggourd:effect_index": 0.8125
+      },
+      "model": "replenishinggourd:item/replenishing_gourd_jump_boost"
+    },
+    {
+      "predicate": {
+        "replenishinggourd:effect_index": 0.875
+      },
+      "model": "replenishinggourd:item/replenishing_gourd_slow_falling"
+    },
+    {
+      "predicate": {
+        "replenishinggourd:effect_index": 0.9375
+      },
+      "model": "replenishinggourd:item/replenishing_gourd_movement_slowdown"
+    }
+  ]
 }

@@ -1,0 +1,6 @@
+{
+  "parent": "item/generated",
+  "textures": {
+    "layer0": "replenishinggourd:item/replenishing_gourd_night_vision"
+  }
+}
